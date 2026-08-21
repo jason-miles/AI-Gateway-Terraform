@@ -68,3 +68,11 @@ Re-running `apply` reconciles to the declared state. Add/remove endpoints by edi
   and extend the provider validation in `variables.tf`.
 - **State hygiene:** provider keys are secret references (never in state), but still treat state as
   sensitive and use the remote backend for any shared use.
+
+---
+
+## Notice
+Provided by **Databricks Field Engineering** for demonstration and enablement — **not an official
+Databricks product**, offered **as-is without warranty**. Example data is **synthetic**; no secrets are
+included (provider keys are secret references, never in state). Databricks features evolve — validate
+against your workspace's current provider/API versions before production use. See `NOTICE.md`.
