@@ -1,0 +1,77 @@
+name: terraform-ci
+
+# Validates + lints + security-scans the AI Gateway Terraform on every change.
+# Never runs plan/apply against a workspace — no credentials required.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: fmt · validate (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [".", "examples/basic", "examples/multi-provider-fallback", "examples/multi-region"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: fmt (check, recursive)
+        if: matrix.dir == '.'
+        run: terraform fmt -check -recursive
+      - name: init (no backend)
+        run: terraform -chdir=${{ matrix.dir }} init -backend=false -input=false
+      - name: validate
+        run: terraform -chdir=${{ matrix.dir }} validate -no-color
+
+  tflint:
+    name: tflint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+      - run: tflint --init
+      - run: tflint --recursive --config="$(pwd)/.tflint.hcl"
+
+  checkov:
+    name: checkov (security scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          soft_fail: true # report without blocking; flip to false to enforce
+
+  terratest:
+    name: terratest (validate suite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - run: go mod tidy
+      - run: go test -run Validate -v ./...
+      # The apply/destroy integration test needs a workspace; run it from a protected
+      # environment with RUN_TF_INTEGRATION=1 and DATABRICKS_* secrets.

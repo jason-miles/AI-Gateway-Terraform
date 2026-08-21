@@ -1,0 +1,19 @@
+# Terraform working files — do not commit
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Local variable files (may contain workspace-specific values)
+terraform.tfvars
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keep in version control: .terraform.lock.hcl (pins provider versions), *.tf, *.example
+
+.DS_Store

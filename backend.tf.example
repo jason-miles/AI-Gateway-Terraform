@@ -1,0 +1,30 @@
+# Remote state — REQUIRED for team/enterprise use. Copy to backend.tf and edit.
+# Local state (the default) is fine for a first trial but must NOT be used by a team:
+# it isn't shared, isn't locked, and can contain sensitive values.
+#
+# Pick ONE backend and remove the others.
+
+terraform {
+  # --- AWS S3 + DynamoDB lock ---
+  backend "s3" {
+    bucket         = "my-tf-state-bucket"
+    key            = "databricks/ai-gateway/terraform.tfstate"
+    region         = "af-south-1"
+    dynamodb_table = "my-tf-locks"
+    encrypt        = true
+  }
+
+  # --- Azure Storage ---
+  # backend "azurerm" {
+  #   resource_group_name  = "tf-state-rg"
+  #   storage_account_name = "tfstateacct"
+  #   container_name       = "tfstate"
+  #   key                  = "databricks/ai-gateway.tfstate"
+  # }
+
+  # --- Databricks-managed (via a workspace-hosted backend / Terraform Cloud) ---
+  # cloud {
+  #   organization = "my-org"
+  #   workspaces { name = "databricks-ai-gateway" }
+  # }
+}

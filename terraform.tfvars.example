@@ -1,0 +1,52 @@
+# Copy to terraform.tfvars and edit. Do NOT commit terraform.tfvars.
+# Auth is separate: export DATABRICKS_TOKEN=..., or set databricks_profile below.
+
+# --- Connection ---
+databricks_host    = "https://your-workspace.cloud.databricks.com"
+databricks_profile = "" # or a ~/.databrickscfg profile name
+
+# --- Global defaults (apply to every endpoint) ---
+catalog          = "main"        # must exist + be writable
+schema           = "ai_gateway"  # must exist
+secret_scope     = "ai_gateway"  # holds provider API keys (create out-of-band; see README)
+environment      = "prod"
+budget_policy_id = ""            # optional UC budget policy id
+global_tags = {
+  cost_center = "ai-platform"
+  owner       = "ai-platform-team"
+}
+
+# --- Endpoints (add entries to scale to many teams/use-cases) ---
+endpoints = {
+  # A general-purpose governed endpoint with OpenAI primary + Anthropic fallback.
+  "ai-gateway-general" = {
+    description       = "General-purpose governed LLM front door"
+    primary_provider  = "openai"
+    primary_model     = "gpt-4o"
+    primary_key_name  = "openai_api_key"
+    fallback_provider = "anthropic"
+    fallback_model    = "claude-3-5-sonnet-20241022"
+    fallback_key_name = "anthropic_api_key"
+    endpoint_qpm      = 1000
+    per_user_qpm      = 60
+    per_user_tpm      = 200000
+    can_query_groups  = ["ai-platform-users"]
+    tags              = { use_case = "general" }
+  }
+
+  # A stricter endpoint for a regulated team: PII blocked in + out, single model.
+  "ai-gateway-regulated" = {
+    description         = "Regulated workload — strict PII controls"
+    primary_provider    = "anthropic"
+    primary_model       = "claude-3-5-sonnet-20241022"
+    primary_key_name    = "anthropic_api_key"
+    fallback_model      = "" # single-model endpoint (no failover)
+    endpoint_qpm        = 300
+    per_user_qpm        = 30
+    pii_input_behavior  = "BLOCK"
+    pii_output_behavior = "BLOCK"
+    allowed_topics      = ["healthcare", "claims", "billing"]
+    can_query_groups    = ["clinical-analysts"]
+    tags                = { use_case = "regulated", data_class = "phi" }
+  }
+}
