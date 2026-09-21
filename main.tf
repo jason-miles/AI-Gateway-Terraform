@@ -30,10 +30,18 @@ module "endpoint" {
   fallback_model    = each.value.fallback_model
   fallback_key_name = each.value.fallback_key_name
 
+  primary_provider_config  = each.value.primary_provider_config
+  fallback_provider_config = each.value.fallback_provider_config
+  additional_fallbacks     = each.value.additional_fallbacks
+
+  primary_traffic_percentage = each.value.primary_traffic_percentage
+
   endpoint_qpm = each.value.endpoint_qpm
   per_user_qpm = each.value.per_user_qpm
   endpoint_tpm = each.value.endpoint_tpm
   per_user_tpm = each.value.per_user_tpm
+
+  enable_payload_logging = each.value.enable_payload_logging
 
   enable_safety       = each.value.enable_safety
   pii_input_behavior  = each.value.pii_input_behavior
@@ -46,10 +54,17 @@ module "endpoint" {
   databricks_workspace_url = var.databricks_host
   budget_policy_id         = each.value.budget_policy_id != "" ? each.value.budget_policy_id : var.budget_policy_id
 
-  # Global tags + standard labels + per-endpoint tags (per-endpoint wins).
+  # Cost-attribution tag taxonomy: global tags, then canonical labels stamped on
+  # every endpoint (endpoint / environment / managed_by) so usage joins cleanly to
+  # system.ai_gateway.usage and Budget tag filters, then per-endpoint tags (which win).
   tags = merge(
     var.global_tags,
-    { environment = var.environment, managed_by = "terraform" },
+    {
+      endpoint    = each.key
+      environment = var.environment
+      managed_by  = "terraform"
+    },
+    each.value.owner != "" ? { owner = each.value.owner } : {},
     each.value.tags,
   )
 }

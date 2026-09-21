@@ -55,16 +55,19 @@ Re-running `apply` reconciles to the declared state. Add/remove endpoints by edi
 | **PII guardrail** (block/mask, in + out) | `guardrails { input/output { pii { behavior } } }` |
 | **Keyword / topic filtering** | `guardrails { input { invalid_keywords / valid_topics } }` |
 | **Content safety** | `guardrails { input/output { safety } }` |
-| **External models** | `config { served_entities { external_model } }` (openai / anthropic) |
+| **External models** | `config { served_entities { external_model } }` — openai, azure-openai, anthropic, cohere, palm, ai21labs, amazon-bedrock, google-vertex-ai, databricks-model-serving |
 | **Provider key management** | `*_config { *_api_key = "{{secrets/<scope>/<key>}}" }` — never in state |
-| **Traffic routing** | `config { traffic_config { routes } }` |
-| **Fallbacks** (auto-failover) | `ai_gateway { fallback_config { enabled } }` (on when a `fallback_model` is set) |
+| **Traffic routing / load balancing** | `config { traffic_config { routes } }` — split via `primary_traffic_percentage` (100 = failover only, <100 = weighted load-balance across primary + fallback) |
+| **Fallbacks** (ordered auto-failover) | `ai_gateway { fallback_config { enabled } }` — ordered chain primary → `fallback_model` → `additional_fallbacks[]`, tried in order on 429/5XX |
 | **Cost attribution** | endpoint **tags** (`global_tags` + `environment` + per-endpoint) + optional `budget_policy_id` |
 | **Access control** | optional `databricks_permissions` granting `CAN_QUERY` to `can_query_groups` |
 
 ## Notes
 - **Single-model endpoint:** set `fallback_model = ""` — fallback entity, route, and failover are omitted.
-- **More providers:** add a matching `dynamic "<provider>_config"` in `modules/ai_gateway_endpoint/main.tf`
+- **Multi-field providers:** `amazon-bedrock`, `google-vertex-ai`, and `azure-openai` read extra settings from
+  `primary_provider_config` / `fallback_provider_config` (region, project, deployment, IAM role, …). Bedrock
+  supports role-based auth (`instance_profile_arn`) or static keys; sensitive values are always secret references.
+- **Even more providers:** add a matching `dynamic "<provider>_config"` in `modules/ai_gateway_endpoint/main.tf`
   and extend the provider validation in `variables.tf`.
 - **State hygiene:** provider keys are secret references (never in state), but still treat state as
   sensitive and use the remote backend for any shared use.

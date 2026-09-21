@@ -17,21 +17,41 @@ global_tags = {
 }
 
 # --- Endpoints (add entries to scale to many teams/use-cases) ---
+# NOTE: set external provider model names to the id your provider currently serves
+# (check the provider's model catalog); Databricks-hosted model names use the
+# workspace serving-endpoint name (e.g. databricks-claude-sonnet-4-6).
 endpoints = {
   # A general-purpose governed endpoint with OpenAI primary + Anthropic fallback.
   "ai-gateway-general" = {
     description       = "General-purpose governed LLM front door"
     primary_provider  = "openai"
-    primary_model     = "gpt-4o"
+    primary_model     = "gpt-4o"                     # → your current OpenAI model id
     primary_key_name  = "openai_api_key"
     fallback_provider = "anthropic"
-    fallback_model    = "claude-3-5-sonnet-20241022"
+    fallback_model    = "claude-3-5-sonnet-20241022" # → your current Anthropic model id
     fallback_key_name = "anthropic_api_key"
     endpoint_qpm      = 1000
     per_user_qpm      = 60
     per_user_tpm      = 200000
     can_query_groups  = ["ai-platform-users"]
-    tags              = { use_case = "general" }
+    tags              = { use_case = "general", team = "ai-platform", application = "shared-front-door" }
+  }
+
+  # Databricks-hosted Claude via the AI Gateway — no third-party key, data stays in-plane.
+  # Demonstrates load-balancing: 80% steady-state to Sonnet, 20% to Haiku.
+  "ai-gateway-claude" = {
+    description                = "Databricks-hosted Claude, load-balanced"
+    primary_provider           = "databricks-model-serving"
+    primary_model              = "databricks-claude-sonnet-4-6" # workspace serving-endpoint name
+    primary_key_name           = "databricks_token"             # secret holding a workspace PAT
+    fallback_provider          = "databricks-model-serving"
+    fallback_model             = "databricks-claude-haiku-4-5"
+    fallback_key_name          = "databricks_token"
+    primary_traffic_percentage = 80 # 80/20 split across Sonnet + Haiku
+    endpoint_qpm               = 800
+    per_user_qpm               = 50
+    can_query_groups           = ["ai-platform-users"]
+    tags                       = { use_case = "assistant", team = "platform", application = "internal-copilot" }
   }
 
   # A stricter endpoint for a regulated team: PII blocked in + out, single model.
@@ -49,4 +69,41 @@ endpoints = {
     can_query_groups    = ["clinical-analysts"]
     tags                = { use_case = "regulated", data_class = "phi" }
   }
+
+  # --- Multi-field providers (uncomment + fill in to use) ---
+
+  # Amazon Bedrock (role-based auth — no static keys in a secret):
+  # "ai-gateway-bedrock" = {
+  #   description      = "Anthropic on Bedrock via role"
+  #   primary_provider = "amazon-bedrock"
+  #   primary_model    = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  #   fallback_model   = ""
+  #   primary_provider_config = {
+  #     aws_region           = "us-east-1"
+  #     bedrock_provider     = "anthropic" # anthropic | cohere | ai21labs | amazon
+  #     instance_profile_arn = "arn:aws:iam::123456789012:instance-profile/bedrock-serving"
+  #     # OR static keys instead of the role:
+  #     # aws_access_key_name = "bedrock_access_key_id"  # secret name; secret access key = primary_key_name
+  #   }
+  #   endpoint_qpm = 500
+  #   per_user_qpm = 40
+  #   tags         = { use_case = "general", team = "ai-platform" }
+  # }
+
+  # Azure OpenAI:
+  # "ai-gateway-azure" = {
+  #   description      = "Azure OpenAI GPT deployment"
+  #   primary_provider = "azure-openai"
+  #   primary_model    = "gpt-4o"            # logical model name
+  #   primary_key_name = "azure_openai_api_key"
+  #   fallback_model   = ""
+  #   primary_provider_config = {
+  #     openai_api_base        = "https://your-resource.openai.azure.com"
+  #     openai_deployment_name = "gpt-4o-prod"
+  #     openai_api_version     = "2024-08-01-preview"
+  #   }
+  #   endpoint_qpm = 600
+  #   per_user_qpm = 40
+  #   tags         = { use_case = "general", team = "ai-platform" }
+  # }
 }
