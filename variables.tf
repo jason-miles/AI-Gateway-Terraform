@@ -51,6 +51,22 @@ variable "global_tags" {
   default     = {}
 }
 
+# Approved-model inventory (blueprint §3 Foundation). If non-empty, every model referenced by
+# any endpoint (primary / fallback / additional) must be in this list, enforced at plan time.
+variable "allowed_models" {
+  type        = list(string)
+  description = "Sanctioned model ids. [] = no restriction; otherwise all endpoint models must be listed."
+  default     = []
+}
+
+# Least-privilege read access to the inference/payload log tables (blueprint §2: access controls).
+# When non-empty, grants USE SCHEMA + SELECT on the log schema to these groups (additive, non-authoritative).
+variable "log_reader_groups" {
+  type        = list(string)
+  description = "Groups granted read access (USE SCHEMA + SELECT) to the inference-log schema. [] = manage access elsewhere."
+  default     = []
+}
+
 # ---------------------------------------------------------------------------
 # The endpoints to manage. Map key = endpoint name. Scale by adding entries.
 # Every field is optional and inherits a sensible default.
@@ -60,6 +76,9 @@ variable "endpoints" {
   type = map(object({
     description       = optional(string, "Governed AI Gateway endpoint")
     owner             = optional(string, "") # service owner (email or group); stamped as an `owner` tag when set
+    business_unit     = optional(string, "") # stamped as a `business_unit` tag (chargeback) — blueprint §2
+    application       = optional(string, "") # stamped as an `application` tag (chargeback) — blueprint §2
+    data_residency    = optional(string, "") # residency label; stamped as a `data_residency` tag
     primary_provider  = optional(string, "openai")
     primary_model     = optional(string, "gpt-4o")
     primary_key_name  = optional(string, "openai_api_key")
@@ -108,6 +127,10 @@ variable "endpoints" {
         openai_api_version     = optional(string, "")
       }), {})
     })), [])
+
+    # Data-residency guardrail (blueprint §4): if non-empty, every Bedrock/Vertex region used by
+    # any entity (primary / fallback / additional) must be in this allow-list. [] = no restriction.
+    allowed_regions = optional(list(string), [])
 
     # Steady-state split across primary + fallback. 100 = failover only; <100 = load-balance.
     primary_traffic_percentage = optional(number, 100)
@@ -182,5 +205,20 @@ variable "endpoints" {
       ]
     ]))
     error_message = "each additional_fallbacks[].provider must be one of the supported providers."
+  }
+
+  # Data residency: every Bedrock/Vertex region used by an endpoint must be within its allowed_regions.
+  validation {
+    condition = alltrue([
+      for e in values(var.endpoints) :
+      length(e.allowed_regions) == 0 || alltrue([
+        for r in compact(concat(
+          [e.primary_provider_config.aws_region, e.primary_provider_config.vertex_region,
+          e.fallback_provider_config.aws_region, e.fallback_provider_config.vertex_region],
+          flatten([for f in e.additional_fallbacks : [f.provider_config.aws_region, f.provider_config.vertex_region]])
+        )) : contains(e.allowed_regions, r)
+      ])
+    ])
+    error_message = "an endpoint uses a Bedrock/Vertex region not in its allowed_regions (data-residency guardrail)."
   }
 }

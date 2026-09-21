@@ -33,6 +33,7 @@ module "endpoint" {
   primary_provider_config  = each.value.primary_provider_config
   fallback_provider_config = each.value.fallback_provider_config
   additional_fallbacks     = each.value.additional_fallbacks
+  allowed_models           = var.allowed_models
 
   primary_traffic_percentage = each.value.primary_traffic_percentage
 
@@ -65,6 +66,19 @@ module "endpoint" {
       managed_by  = "terraform"
     },
     each.value.owner != "" ? { owner = each.value.owner } : {},
+    each.value.business_unit != "" ? { business_unit = each.value.business_unit } : {},
+    each.value.application != "" ? { application = each.value.application } : {},
+    each.value.data_residency != "" ? { data_residency = each.value.data_residency } : {},
     each.value.tags,
   )
+}
+
+# Least-privilege read access to the inference/payload log schema (blueprint §2). Additive
+# per-principal grants (non-authoritative), inert unless var.log_reader_groups is set.
+resource "databricks_grant" "inference_logs" {
+  for_each = toset(var.log_reader_groups)
+
+  schema     = "${var.catalog}.${var.schema}"
+  principal  = each.value
+  privileges = ["USE_SCHEMA", "SELECT"]
 }

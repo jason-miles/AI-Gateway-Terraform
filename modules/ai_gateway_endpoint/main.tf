@@ -51,6 +51,13 @@ locals {
     }],
   )
 
+  # Every model id this endpoint references (for the approved-inventory precondition).
+  all_models = concat(
+    [var.primary_model],
+    local.has_fallback ? [var.fallback_model] : [],
+    [for f in var.additional_fallbacks : f.model],
+  )
+
   # Rate limits: QPM (calls) always; TPM (tokens) only when > 0.
   rate_limits = concat(
     [
@@ -66,6 +73,15 @@ resource "databricks_model_serving" "this" {
   name             = var.endpoint_name
   description      = var.description
   budget_policy_id = var.budget_policy_id != "" ? var.budget_policy_id : null
+
+  # Approved-model inventory guardrail (blueprint §3): every model this endpoint serves must be
+  # in the sanctioned list when one is provided. Enforced at plan time.
+  lifecycle {
+    precondition {
+      condition     = length(var.allowed_models) == 0 || alltrue([for m in local.all_models : contains(var.allowed_models, m)])
+      error_message = "endpoint references a model not in var.allowed_models (approved-model inventory)."
+    }
+  }
 
   # Ops alerting on failed config rollouts.
   dynamic "email_notifications" {

@@ -134,6 +134,12 @@ variable "additional_fallbacks" {
   default     = []
 }
 
+variable "allowed_models" {
+  type        = list(string)
+  description = "Approved-model inventory (passed from the root). [] = no restriction; otherwise this endpoint's primary/fallback/additional models must all be listed. Enforced via a plan-time precondition."
+  default     = []
+}
+
 # --- Rate limits ---
 variable "endpoint_qpm" {
   type        = number
